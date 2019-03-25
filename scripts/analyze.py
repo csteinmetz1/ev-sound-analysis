@@ -102,7 +102,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="ev-sound-analysis")
     parser.add_argument("input", help="path to input directory (containing .wav files)", type=str)
     parser.add_argument("-o", "--output", help="path to output directory", type=str)
-    parser.add_argument("-a", "--audio", help="generate audio stream from input file", action="store_true")
     args = parser.parse_args()
 
     if args.output:

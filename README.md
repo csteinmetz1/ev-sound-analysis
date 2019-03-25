@@ -3,7 +3,6 @@ Analyzing audio from electric vehicles to determine FMVSS 141 compliance
 
 ## Overview
 
-
 [idle_MITSUBISHI_PAJERO_front_engine.wav](https://freesound.org/people/gladkiy/sounds/332385/) by gladkiy was used for this example.
 
 ## Setup and Usage
@@ -23,7 +22,7 @@ pip install -r requirements.txt
 Run analysis on your audio file or files.
 
 ```
-python scripts/analyze.py path/to/audio/file.wav
+python scripts/analyze.py input_directory -o output_directory
 ```
 
 ## Background
