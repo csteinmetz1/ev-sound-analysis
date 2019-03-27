@@ -7,6 +7,8 @@ from scipy import signal
 import scipy.fftpack as fftpack
 import matplotlib.pyplot as plt
 
+from A_weighting import A_weighting
+
 def analyze(audio_path, output_dir):
     block_size = 65536 # number of seconds to analyze
 
@@ -46,6 +48,9 @@ def analyze(audio_path, output_dir):
     frq = frq[range(n//2)]			# take just positive frequencies 
 
     print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_path}\n")
+
+    b, a = A_weighting(fs)
+    x = signal.lfilter(b, a, x)
 
     # what size fft should we use? 
     # does the specification say over what time period we are interested?
@@ -93,7 +98,7 @@ def analyze(audio_path, output_dir):
     ax[1].set_xticklabels(xticks)
     ax[1].set_ylim(-60, 6)
     ax[1].set_xlabel('Freq (Hz)')
-    ax[1].set_ylabel('Power (dB SPL)')
+    ax[1].set_ylabel('Power (dBFS)')
 
     plt.savefig(plot_path + '.png')
     plt.savefig(plot_path + '.svg')
