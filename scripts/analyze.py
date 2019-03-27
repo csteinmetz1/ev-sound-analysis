@@ -9,10 +9,13 @@ import matplotlib.pyplot as plt
 
 from A_weighting import A_weighting
 
-def analyze(audio_path, output_dir):
+def analyze(audio_path, output_dir, plot_filetype):
+    # does the specification say over what time period we are interested?
     block_size = 65536 # number of seconds to analyze
 
-    # load in data
+    #-----------------------------------------------------------------------
+    # Data loading and configuration
+    #-----------------------------------------------------------------------
     try:
         x, fs = sf.read(audio_path) # must be fs=48kHz
     except Exception as e:
@@ -28,8 +31,6 @@ def analyze(audio_path, output_dir):
     except Exception as e:
         print(e, "\nSkipping...\n")
         return
-
-    plot_path = os.path.join(output_dir, os.path.basename(audio_path.strip(".wav")))
 
     # take the left channel and block_size samples
     if x.ndim > 1:
@@ -49,15 +50,17 @@ def analyze(audio_path, output_dir):
 
     print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_path}\n")
 
-    b, a = A_weighting(fs)
-    x = signal.lfilter(b, a, x)
+    #-----------------------------------------------------------------------
+    # Audio processing and analysis
+    #-----------------------------------------------------------------------
 
-    # what size fft should we use? 
-    # does the specification say over what time period we are interested?
+    # apply A weighting filter to account for human perception
+    b, a = A_weighting(fs)
+    x_a = signal.lfilter(b, a, x)
 
     # window the signal
     w = signal.blackmanharris(n)
-    x_w = x * w
+    x_w = x_a * w
 
     # perform frequency domain analysis
     y = fftpack.fft(x_w)/(n)
@@ -69,7 +72,7 @@ def analyze(audio_path, output_dir):
     # (12.5 Hz - 5000 Hz)
     bands = np.arange(10,38)
     octaves = (2 ** ((bands-30)/3))*(1000)
-    xticks = [str(int(round(x_w, 0))) for x_w in octaves]
+    xticks = [str(int(round(x_w, 0))) for x_w in octaves][15:]
 
     power = []
     step = 1
@@ -88,25 +91,62 @@ def analyze(audio_path, output_dir):
     # convert amplitude to power in dB
     power = 20 * np.log10(power)
 
-    # plot the results
-    fig, ax = plt.subplots(2, 1, figsize=(20, 10))
-    ax[0].plot(tv,x_w)
-    ax[0].set_xlabel('Time (s)')
-    ax[0].set_ylabel('Amplitude (dBFS)')
-    ax[1].plot(bands, power, color='r')
-    ax[1].set_xticks(bands)
-    ax[1].set_xticklabels(xticks)
-    ax[1].set_ylim(-60, 6)
-    ax[1].set_xlabel('Freq (Hz)')
-    ax[1].set_ylabel('Power (dBFS)')
+    # calibration
+    cal = -20 # dBFS with 1 kHz sine wave @ 60dB SPL in mic location
+    power += (60 - cal)
 
-    plt.savefig(plot_path + '.png')
-    plt.savefig(plot_path + '.svg')
+    #-----------------------------------------------------------------------
+    # Plotting 
+    #-----------------------------------------------------------------------
+
+    # storage based upon input filename
+    filename = os.path.basename(audio_path)
+    plot_path = os.path.join(output_dir, filename.replace(".wav", ""))
+
+    # plot joint time domain and frequency
+    fig, ax = plt.subplots(2, 1, figsize=(20, 10))
+    ax[0].plot(tv, x)
+    ax[0].set_xlabel('Time (s)')
+    ax[0].set_ylabel('Amplitude ()')
+    ax[1].bar(bands[15:], power[15:], color='r', zorder=3)
+    ax[1].set_xticks(bands[15:])
+    ax[1].set_xticklabels(xticks)
+    ax[1].set_xlabel('Freq (Hz)')
+    ax[1].set_ylabel('Power (dB SPL)')
+    ax[1].grid(zorder=0)
+    ax[0].set_title(filename)
+    ax[1].set_title('1/3 Octave Analysis')
+
+    plt.savefig(plot_path + '_j' + '.' + plot_filetype)
+
+    # plot frequency alone
+    fig, ax = plt.subplots(1, 1, figsize=(20, 10))
+    ax.bar(bands[15:], power[15:], color='r', zorder=3)
+    ax.set_xticks(bands[15:])
+    ax.set_xticklabels(xticks)
+    ax.set_xlabel('Freq (Hz)')
+    ax.set_ylabel('Power (dB SPL)')
+    ax.grid(zorder=0)
+    ax.set_title(filename + ' - 1/3 Octave Analysis')
+
+    plt.savefig(plot_path + '_f' + '.' + plot_filetype)
+
+    # plot time domain alone
+    fig, ax = plt.subplots(1, 1, figsize=(20, 10))
+    ax.plot(tv, x)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Amplitude ()')
+    ax.grid(zorder=0)
+    ax.set_title(filename + ' - Time Domain')
+
+    plt.savefig(plot_path + '_t' + '.' + plot_filetype)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="ev-sound-analysis")
     parser.add_argument("input", help="path to input directory (containing .wav files)", type=str)
     parser.add_argument("-o", "--output", help="path to output directory", type=str)
+    parser.add_argument("-t", "--plot_filetype", help="filetype for plots ['png', 'svg', 'pdf']", type=str)
+
     args = parser.parse_args()
 
     if args.output:
@@ -116,6 +156,9 @@ if __name__ == '__main__':
     else:
         args.output = './'
 
+    if not args.plot_filetype: # default is png
+        args.plot_filetype = 'png'
+
     for sample in glob.glob(os.path.join(args.input, "*.wav")):
-        analyze(sample, args.output)
+        analyze(sample, args.output, args.plot_filetype)
 

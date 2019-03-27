@@ -31,5 +31,6 @@ A new regulation from the National Highway Traffic Safety Administration has bee
 [Federal Motor Vehicle Safety Standard No. 141, Minimum Sound Requirements for Hybrid and Electric Vehicles](https://www.federalregister.gov/documents/2018/02/26/2018-03721/federal-motor-vehicle-safety-standard-no-141-minimum-sound-requirements-for-hybrid-and-electric)
 
 ## Resources 
-[1/3 octave band analysis by FFT](http://www.mstarlabs.com/docs/tn257.html)
-http://www.ni.com/pdf/manuals/320952a.pdf
+* [1/3 octave band analysis by FFT](http://www.mstarlabs.com/docs/tn257.html)
+* [Third-Octave Analysis Toolkit](http://www.ni.com/pdf/manuals/320952a.pdf)
+* [A weighting filter](https://gist.github.com/endolith/148112) by [endolith](https://github.com/endolith)
