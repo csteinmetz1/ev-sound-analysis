@@ -2,6 +2,8 @@ import os
 import glob
 import argparse
 import numpy as np
+import seaborn as sns
+current_palette = sns.color_palette()
 import soundfile as sf
 from scipy import signal
 import scipy.fftpack as fftpack
@@ -94,7 +96,7 @@ def analyze(audio_path, output_dir, plot_filetype):
     power = 20 * np.log10(power)
 
     # calibration
-    cal = -20 # dBFS with 1 kHz sine wave @ 60dB SPL in mic location
+    cal = -12 # dBFS with 1 kHz sine wave @ 60dB SPL in mic location
     power += (60 - cal)
 
     #-----------------------------------------------------------------------
@@ -107,39 +109,47 @@ def analyze(audio_path, output_dir, plot_filetype):
 
     # plot joint time domain and frequency
     fig, ax = plt.subplots(2, 1, figsize=FIGSIZE)
-    ax[0].plot(tv, x)
+    ax[0].plot(tv, x, color='#1c4b82')
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel('Amplitude ()')
     ax[0].set_title(filename)
-    ax[1].bar(bands[15:], power[15:], color='r', zorder=3)
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['top'].set_visible(False)
+    ax[1].bar(bands[15:], power[15:], color='#dd6b4d', zorder=3)
     ax[1].set_xticks(bands[15:])
     ax[1].set_xticklabels(xticks)
     ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
     ax[1].set_ylabel('Amplitude (dB SPL)')
-    ax[1].axhline(y=40, color='blue', zorder=4)
-    ax[1].grid(zorder=0)
+    ax[1].axhline(y=40, color='#183661', zorder=4)
+    #ax[1].grid(zorder=0)
+    ax[1].spines['right'].set_visible(False)
+    ax[1].spines['top'].set_visible(False)
 
     plt.savefig(plot_path + '_j' + '.' + plot_filetype)
 
     # plot frequency alone
     fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-    ax.bar(bands[15:], power[15:], color='r', zorder=3)
+    ax.bar(bands[15:], power[15:], color='#dd6b4d', zorder=3)
     ax.set_xticks(bands[15:])
     ax.set_xticklabels(xticks)
     ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
     ax.set_ylabel('Amplitude (dB SPL)')
-    ax.axhline(y=40, color='blue', zorder=4)
-    ax.grid(zorder=0)
+    ax.axhline(y=40, color='#183661', zorder=4)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    #ax.grid(zorder=0)
     ax.set_title(filename)
 
     plt.savefig(plot_path + '_f' + '.' + plot_filetype)
 
     # plot time domain alone
     fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-    ax.plot(tv, x)
+    ax.plot(tv, x, color='#1c4b82')
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Amplitude ()')
-    ax.grid(zorder=0)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    #ax.grid(zorder=0)
     ax.set_title(filename)
 
     plt.savefig(plot_path + '_t' + '.' + plot_filetype)
