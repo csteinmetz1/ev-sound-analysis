@@ -7,6 +7,8 @@ from scipy import signal
 import scipy.fftpack as fftpack
 import matplotlib.pyplot as plt
 
+# local imports
+from plot_style import *
 from A_weighting import A_weighting
 
 def analyze(audio_path, output_dir, plot_filetype):
@@ -104,40 +106,41 @@ def analyze(audio_path, output_dir, plot_filetype):
     plot_path = os.path.join(output_dir, filename.replace(".wav", ""))
 
     # plot joint time domain and frequency
-    fig, ax = plt.subplots(2, 1, figsize=(20, 10))
+    fig, ax = plt.subplots(2, 1, figsize=FIGSIZE)
     ax[0].plot(tv, x)
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel('Amplitude ()')
+    ax[0].set_title(filename)
     ax[1].bar(bands[15:], power[15:], color='r', zorder=3)
     ax[1].set_xticks(bands[15:])
     ax[1].set_xticklabels(xticks)
-    ax[1].set_xlabel('Freq (Hz)')
-    ax[1].set_ylabel('Power (dB SPL)')
+    ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
+    ax[1].set_ylabel('Amplitude (dB SPL)')
+    ax[1].axhline(y=40, color='blue', zorder=4)
     ax[1].grid(zorder=0)
-    ax[0].set_title(filename)
-    ax[1].set_title('1/3 Octave Analysis')
 
     plt.savefig(plot_path + '_j' + '.' + plot_filetype)
 
     # plot frequency alone
-    fig, ax = plt.subplots(1, 1, figsize=(20, 10))
+    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
     ax.bar(bands[15:], power[15:], color='r', zorder=3)
     ax.set_xticks(bands[15:])
     ax.set_xticklabels(xticks)
-    ax.set_xlabel('Freq (Hz)')
-    ax.set_ylabel('Power (dB SPL)')
+    ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
+    ax.set_ylabel('Amplitude (dB SPL)')
+    ax.axhline(y=40, color='blue', zorder=4)
     ax.grid(zorder=0)
-    ax.set_title(filename + ' - 1/3 Octave Analysis')
+    ax.set_title(filename)
 
     plt.savefig(plot_path + '_f' + '.' + plot_filetype)
 
     # plot time domain alone
-    fig, ax = plt.subplots(1, 1, figsize=(20, 10))
+    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
     ax.plot(tv, x)
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Amplitude ()')
     ax.grid(zorder=0)
-    ax.set_title(filename + ' - Time Domain')
+    ax.set_title(filename)
 
     plt.savefig(plot_path + '_t' + '.' + plot_filetype)
 
