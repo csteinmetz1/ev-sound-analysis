@@ -1,9 +1,10 @@
 import os
 import glob
+import json
 import argparse
 import numpy as np
 import seaborn as sns
-current_palette = sns.color_palette()
+
 import soundfile as sf
 from scipy import signal
 import scipy.fftpack as fftpack
@@ -13,7 +14,15 @@ import matplotlib.pyplot as plt
 from plot_style import *
 from A_weighting import A_weighting
 
-def analyze(audio_path, output_dir, plot_filetype):
+
+# TODO
+# ------------------------
+# maybe pad with zeros if it too short
+# also need to consider finding the 1 second frame with the greatest energy
+# calibration loading
+# plot ambient sound response as well
+
+def analyze(audio_path, output_dir, plot_filetype, sound_level_reqs):
     # does the specification say over what time period we are interested?
     block_size = 65536 # number of seconds to analyze
 
@@ -41,6 +50,16 @@ def analyze(audio_path, output_dir, plot_filetype):
         x = x[:block_size,0] 	
     else:
         x = x[:block_size]
+
+    # determine test type
+    # ex: 'stat_03-30-2019_001.wav'
+    filename = os.path.basename(audio_path).replace(".wav", "")
+    details = filename.split("_")
+    test_type = details[0]
+    test_date = details[1]
+    test_num  = int(details[2])
+    band_specs = list(sound_level_reqs[test_type]["1/3 octave bands"].values())
+    two_band_spec = sound_level_reqs[test_type]["two band spec"]
 
     ts = 1.0/fs 					# sampling period		(seconds)
     n = x.shape[0]					# number of samples 
@@ -106,6 +125,9 @@ def analyze(audio_path, output_dir, plot_filetype):
     # storage based upon input filename
     filename = os.path.basename(audio_path)
     plot_path = os.path.join(output_dir, filename.replace(".wav", ""))
+    # create title for each plot based on filename?
+
+    width = 0.35
 
     # plot joint time domain and frequency
     fig, ax = plt.subplots(2, 1, figsize=FIGSIZE)
@@ -115,7 +137,8 @@ def analyze(audio_path, output_dir, plot_filetype):
     ax[0].set_title(filename)
     ax[0].spines['right'].set_visible(False)
     ax[0].spines['top'].set_visible(False)
-    ax[1].bar(bands[15:], power[15:], color='#dd6b4d', zorder=3)
+    ax[1].bar(bands[15:], power[15:], width, color='#dd6b4d', zorder=3)
+    ax[1].bar(bands[15:]+width, band_specs, width,  color='red', zorder=3)
     ax[1].set_xticks(bands[15:])
     ax[1].set_xticklabels(xticks)
     ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
@@ -124,12 +147,14 @@ def analyze(audio_path, output_dir, plot_filetype):
     #ax[1].grid(zorder=0)
     ax[1].spines['right'].set_visible(False)
     ax[1].spines['top'].set_visible(False)
-
+    
     plt.savefig(plot_path + '_j' + '.' + plot_filetype)
+    plt.cla()
 
     # plot frequency alone
     fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-    ax.bar(bands[15:], power[15:], color='#dd6b4d', zorder=3)
+    p1 = ax.bar(bands[15:], power[15:], width, color='#dd6b4d', zorder=3)
+    p2 = ax.bar(bands[15:]+width, band_specs, width,  color='red', zorder=3)
     ax.set_xticks(bands[15:])
     ax.set_xticklabels(xticks)
     ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
@@ -137,30 +162,35 @@ def analyze(audio_path, output_dir, plot_filetype):
     ax.axhline(y=40, color='#183661', zorder=4)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
+    ax.legend((p1[0], p2[0]), ('Measured', 'Spec'))
     #ax.grid(zorder=0)
     ax.set_title(filename)
 
     plt.savefig(plot_path + '_f' + '.' + plot_filetype)
+    plt.cla()
 
     # plot time domain alone
-    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-    ax.plot(tv, x, color='#1c4b82')
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Amplitude ()')
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
+    #fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
+    #ax.plot(tv, x, color='#1c4b82')
+    #ax.set_xlabel('Time (s)')
+    #ax.set_ylabel('Amplitude ()')
+    #ax.spines['right'].set_visible(False)
+    #ax.spines['top'].set_visible(False)
     #ax.grid(zorder=0)
-    ax.set_title(filename)
+    #ax.set_title(filename)
 
-    plt.savefig(plot_path + '_t' + '.' + plot_filetype)
+    #plt.savefig(plot_path + '_t' + '.' + plot_filetype)
+    #plt.cla()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="ev-sound-analysis")
     parser.add_argument("input", help="path to input directory (containing .wav files)", type=str)
     parser.add_argument("-o", "--output", help="path to output directory", type=str)
     parser.add_argument("-t", "--plot_filetype", help="filetype for plots ['png', 'svg', 'pdf']", type=str)
-
     args = parser.parse_args()
+
+    # load sound level requirements from json defition file
+    sound_level_reqs = json.load(open("sound_level_reqs.json"))
 
     if args.output:
         # create output directory if nonexistent 
@@ -173,5 +203,5 @@ if __name__ == '__main__':
         args.plot_filetype = 'png'
 
     for sample in glob.glob(os.path.join(args.input, "*.wav")):
-        analyze(sample, args.output, args.plot_filetype)
+        analyze(sample, args.output, args.plot_filetype, sound_level_reqs)
 
