@@ -34,36 +34,22 @@ plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 
-
-class Test():
-
-    def __init__(self, audio_file):
-       
-        # ex: 'stat_03-30-2019_001.wav'
-        self.filename = os.path.basename(audio_file).replace(".wav", "")
-
-        # get test details from filename
-        details = filename.split( "_")
-        self.type = details[0]
-        self.date = details[1]
-        self.id  = int(details[2])
-
-        # load audio data
-        self.x, self.fs = sf.read(audio_file) # must be fs=48kHz
-        self.validate_audio(self.x, self.fs)
-        print(f"Loaded {self.x.shape[0]} samples with fs = {self.fs} from {audio_path}\n")
-
-        band_specs = list(sound_level_reqs[test_type]["1/3 octave bands"].values())
-        two_band_spec = sound_level_reqs[test_type]["two band spec"]
+test_names = {
+    "30"   : "30km/hr",
+    "20"   : "20km/hr",
+    "10"   : "10km/hr",
+    "stat" : "Stationary",
+    "rev"  : "Reverse",
+}
 
 class Analyzer():
     
-    def __init__(self, cal_file, cal_fs, cal_target, cal_type, block_size, output_dir, file_type):
+    def __init__(self, cal_file, cal_fs, cal_target, cal_type, output_dir, file_type):
         self.cal_file = cal_file        # path to calibratio nfile
         self.cal_fs = cal_fs            # sampling rate of calibration file
         self.cal_target = cal_target    # in dB SPL 
         self.cal_type = cal_type        # 'min', 'max', or 'mean'
-        self.block_size = block_size    # analysis size
+        self.block_size = 65536         # analysis size
         self.output_dir = output_dir    # directory to save plots
         self.file_type = file_type      # image file type - 'png', 'jpg, 'pdf'
         self.calibrate()
@@ -98,7 +84,15 @@ class Analyzer():
 
     def run(self, audio_file):
         
+        # get the audio samples from test file
         x, fs = self.load(audio_file)
+
+        # determine test type based on filename
+        test = self.get_test_details(audio_file)
+
+        # get specifications based on test type
+        self.band_specs = list(self.slr[test["type"]]["1/3 octave bands"].values())
+        self.two_band_spec = self.slr[test["type"]]["two band spec"]
 
         # take the left channel and self.block_size samples
         if x.ndim > 1:
@@ -151,12 +145,14 @@ class Analyzer():
             "power"  : power,
             "xticks" : xticks}
 
-        self.generate_plots("test_plot", plot_data)
+        plot_title = f"{test_names[test['type']]} # {test['num']} | {test['date']}"
+        plot_filename = test['file']
+        self.generate_plots(plot_title, plot_filename, plot_data)
 
-    def generate_plots(self, plot_name, plot_data):
+    def generate_plots(self, plot_title, plot_filename, plot_data):
 
         # storage based upon input filename
-        plot_path = os.path.join(self.output_dir, plot_name)
+        plot_path = os.path.join(self.output_dir, plot_filename)
 
         # extract plot data
         x      = plot_data['audio']
@@ -179,16 +175,16 @@ class Analyzer():
         ax[0].plot(tv, x, color='#1c4b82')
         ax[0].set_xlabel('Time (s)')
         ax[0].set_ylabel('Amplitude ()')
-        ax[0].set_title(plot_name)
+        ax[0].set_title(plot_title)
         ax[0].spines['right'].set_visible(False)
         ax[0].spines['top'].set_visible(False)
         ax[1].bar(bands[15:], power[15:], width, color='#dd6b4d', zorder=3)
-        ax[1].bar(bands[15:]+width, self.slr, width,  color='red', zorder=3)
+        ax[1].bar(bands[15:]+width, self.band_specs, width,  color='red', zorder=3)
         ax[1].set_xticks(bands[15:])
         ax[1].set_xticklabels(xticks)
         ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
         ax[1].set_ylabel('Amplitude (dB SPL)')
-        ax[1].axhline(y=40, color='#183661', zorder=4)
+        ax[1].axhline(y=self.two_band_spec, color='#183661', zorder=4)
         #ax[1].grid(zorder=0)
         ax[1].spines['right'].set_visible(False)
         ax[1].spines['top'].set_visible(False)
@@ -199,20 +195,31 @@ class Analyzer():
         # plot frequency alone
         fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
         p1 = ax.bar(bands[15:], power[15:], width, color='#dd6b4d', zorder=3)
-        p2 = ax.bar(bands[15:]+width, self.slr, width,  color='red', zorder=3)
+        p2 = ax.bar(bands[15:]+width, self.band_specs, width,  color='red', zorder=3)
         ax.set_xticks(bands[15:])
         ax.set_xticklabels(xticks)
         ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
         ax.set_ylabel('Amplitude (dB SPL)')
-        ax.axhline(y=40, color='#183661', zorder=4)
+        ax.axhline(y=self.two_band_spec, color='#183661', zorder=4)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.legend((p1[0], p2[0]), ('Measured', 'Spec'))
         #ax.grid(zorder=0)
-        ax.set_title(plot_name)
+        ax.set_title(plot_title)
 
         plt.savefig(plot_path + '_f' + '.' + self.file_type)
         plt.cla()
+
+    def get_test_details(self, audio_file):
+        filename = os.path.basename(audio_file).replace(".wav", "")
+        details = filename.split("_")
+        test = {
+            "type" : details[0],
+            "date" : details[1],
+            "num"  : int(details[2]),
+            "file" : filename}
+
+        return test
 
     def validate_audio(self, x, fs):
         """ Validate input audio data.
@@ -428,14 +435,16 @@ if __name__ == '__main__':
     # create (and calibrate) analyzer
     analyzer = Analyzer(cal_files[0], 
                         48000, 
-                        -60, 
+                        60, 
                         'mean', 
-                        1024, 
                         args.output, 
                         args.file_type)
 
     # anaylze all test files
     for sample in test_files:
-        print(sample)
-        analyzer.run(sample)
+        try:
+            print(sample)
+            analyzer.run(sample)
+        except Exception as e:
+            print(e)
 
