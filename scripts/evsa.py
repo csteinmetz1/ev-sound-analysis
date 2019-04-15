@@ -21,17 +21,21 @@ if __name__ == '__main__':
         args.file_type = 'png'
 
     # get audio files 
-    cal_files = glob.glob(os.path.join(args.input, "cal*.wav"))
+    cal_files  = glob.glob(os.path.join(args.input, "cal*.wav"))
+    amb_files  = glob.glob(os.path.join(args.input, "amb*.wav"))
     test_files = glob.glob(os.path.join(args.input, "[!cal]*.wav"))
+
     if len(cal_files) < 1:
         raise RuntimeError("No calibration file found.")
+    if len(amb_files) < 1:
+        raise RuntimeError("No ambient test files found.")
     if len(test_files) < 1:
         raise RuntimeError("No test files found.")
 
     # create (and calibrate) analyzer
-    analyzer = Analyzer(cal_files[0], 48000, 
-                        'mean', args.output, 
-                        args.file_type)
+    analyzer = Analyzer(cal_files[0], 48000, 'mean', # calibration file details
+                        amb_files[0],                # ambient file details   
+                        args.output, args.file_type) # output plot setttings
 
     # anaylze all test files
     for sample in test_files:

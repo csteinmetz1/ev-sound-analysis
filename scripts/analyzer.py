@@ -16,17 +16,22 @@ from A_weighting import A_weighting
 # ------------------------
 # maybe pad with zeros if it too short
 # also need to consider finding the 1 second frame with the greatest energy
-# calibration loading
 # plot ambient sound response as well
 
 # Plot settings
 # -----------------------------------------------------------------------------
 FIGSIZE = (15, 10)
 
+# colors
+CERULEAN  = "#4484ce"
+ALUMINIUM = "#d9d9d9"
+LIGHT     = "#f9cf00"
+TANGERINE = "#f19f4d" 
+
+# font sizes
 SMALL_SIZE = 14
 MEDIUM_SIZE = 16
 BIGGER_SIZE = 18
-
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)    # fontsize of the axes title
 plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
@@ -34,6 +39,7 @@ plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 
+# plot title full names
 test_names = {
     "30"   : "30km/hr",
     "20"   : "20km/hr",
@@ -44,14 +50,17 @@ test_names = {
 
 class Analyzer():
     
-    def __init__(self, cal_file, cal_fs, cal_type, output_dir, file_type):
-        self.cal_file = cal_file        # path to calibratio nfile
-        self.cal_fs = cal_fs            # sampling rate of calibration file
-        self.cal_type = cal_type        # 'min', 'max', or 'mean'
-        self.block_size = 65536         # analysis size
-        self.output_dir = output_dir    # directory to save plots
-        self.file_type = file_type      # image file type - 'png', 'jpg, 'pdf'
-        self.calibrate()
+    def __init__(self, cal_file, cal_fs, cal_type, amb_file, output_dir, file_type):
+        self.cal_file     = cal_file        # path to calibration nfile
+        self.cal_fs       = cal_fs          # sampling rate of calibration file
+        self.cal_type     = cal_type        # 'min', 'max', or 'mean'
+        self.amb_file     = amb_file        # path to ambient sound level file
+        self.output_dir   = output_dir      # directory to save plots
+        self.file_type    = file_type       # image file type - 'png', 'jpg, 'pdf'
+        #-------------------------------------------------------------------------
+        self.block_size   = 65536           # analysis size
+        self.cal          = self.calibrate()
+        self.amb_analysis = self.analyze(self.amb_file)
         
         # load sound level requirements from json defition file
         self.slr = json.load(open("sound_level_reqs.json"))
@@ -63,6 +72,7 @@ class Analyzer():
         return x, fs
 
     def calibrate(self):
+        # extract the dB SPL target value measured during the calibration
         self.cal_target = int(os.path.basename(self.cal_file).split('_')[1])
 
         # load audio data
@@ -78,22 +88,16 @@ class Analyzer():
         cal_a = np.sqrt(cal_a)                      # take the sqaure root
         cal_a = 20*np.log10(cal_a)                  # convert to dB scale
 
-        self.cal = {   
+        cal = {
             "max"  : np.max(cal_a),
             "min"  : np.min(cal_a),
             "mean" : np.mean(cal_a)}
 
-    def run(self, audio_file):
-        
+        return cal 
+
+    def analyze(self, audio_file):
         # get the audio samples from test file
         x, fs = self.load(audio_file)
-
-        # determine test type based on filename
-        test = self.get_test_details(audio_file)
-
-        # get specifications based on test type
-        self.band_specs = list(self.slr[test["type"]]["1/3 octave bands"].values())
-        self.two_band_spec = self.slr[test["type"]]["two band spec"]
 
         # take the left channel and self.block_size samples
         if x.ndim > 1:
@@ -137,17 +141,32 @@ class Analyzer():
         power = 20 * np.log10(power)
 
         # calibration - dBFS with 1 kHz sine wave @ 60dB SPL in mic location
-        power += (self.cal_target - self.cal[self.cal_type])
+        power += self.cal_target - self.cal[self.cal_type]
 
-        plot_data = {
+        analysis = {
             "audio"  : x,
             "bands"  : bands,
             "power"  : power,
             "xticks" : xticks}
+        
+        return analysis
 
-        plot_title = f"{test_names[test['type']]} # {test['num']} | {test['date']}"
-        plot_filename = test['file']
-        self.generate_plots(plot_title, plot_filename, plot_data)
+    def run(self, audio_file):
+        
+        # determine test type based on filename
+        test = self.get_test_details(audio_file)
+
+        # get specifications based on test type
+        self.band_specs = list(self.slr[test["type"]]["1/3 octave bands"].values())
+        self.two_band_spec = self.slr[test["type"]]["two band spec"]
+
+        # run analysis on test file
+        analysis = self.analyze(audio_file)
+
+        # create final plots
+        plot_title     = f"{test_names[test['type']]} # {test['num']} | {test['date']}"
+        plot_filename  = test['file']
+        self.generate_plots(plot_title, plot_filename, analysis)
 
     def generate_plots(self, plot_title, plot_filename, plot_data):
         """ Create plots of the audio time series and frequency response.
@@ -173,7 +192,7 @@ class Analyzer():
 
         # create title for each plot based on filename?
 
-        width = 0.35
+        width = 0.25
 
         # plotting variables
         ts = 1.0/self.fs 			    # sampling period		(seconds)
@@ -189,33 +208,36 @@ class Analyzer():
         ax[0].set_title(plot_title)
         ax[0].spines['right'].set_visible(False)
         ax[0].spines['top'].set_visible(False)
-        ax[1].bar(bands[15:], power[15:], width, color='#dd6b4d', zorder=3)
-        ax[1].bar(bands[15:]+width, self.band_specs, width,  color='red', zorder=3)
+        ax[0].grid(zorder=0)
+
+        p1 = ax[1].bar(bands[15:]-width, power[15:], width, color=CERULEAN, zorder=3)
+        p2 = ax[1].bar(bands[15:], self.band_specs, width,  color=TANGERINE, zorder=3)
+        p3 = ax[1].bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=LIGHT, zorder=3)
         ax[1].set_xticks(bands[15:])
         ax[1].set_xticklabels(xticks)
         ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
         ax[1].set_ylabel('Amplitude (dB SPL)')
-        ax[1].axhline(y=self.two_band_spec, color='#183661', zorder=4)
-        #ax[1].grid(zorder=0)
+        p4 = ax[1].axhline(y=self.two_band_spec, color='#183661', zorder=4)
         ax[1].spines['right'].set_visible(False)
         ax[1].spines['top'].set_visible(False)
+        ax[1].legend((p1[0], p2[0], p3[0], p4), ('Measured', 'Spec', 'Ambient', '2-Band Spec'))
         
         plt.savefig(plot_path + '_j' + '.' + self.file_type)
         plt.cla()
 
         # plot frequency alone
         fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-        p1 = ax.bar(bands[15:], power[15:], width, color='#dd6b4d', zorder=3)
-        p2 = ax.bar(bands[15:]+width, self.band_specs, width,  color='red', zorder=3)
+        p1 = ax.bar(bands[15:]-width, power[15:], width, color=CERULEAN, zorder=3)
+        p2 = ax.bar(bands[15:], self.band_specs, width,  color=TANGERINE, zorder=3)
+        p3 = ax.bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=LIGHT, zorder=3)
         ax.set_xticks(bands[15:])
         ax.set_xticklabels(xticks)
         ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
         ax.set_ylabel('Amplitude (dB SPL)')
-        ax.axhline(y=self.two_band_spec, color='#183661', zorder=4)
+        p4 = ax.axhline(y=self.two_band_spec, color='#183661', zorder=4)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
-        ax.legend((p1[0], p2[0]), ('Measured', 'Spec'))
-        #ax.grid(zorder=0)
+        ax.legend((p1[0], p2[0], p3[0], p4), ('Measured', 'Spec', 'Ambient', '2-Band Spec'))
         ax.set_title(plot_title)
 
         plt.savefig(plot_path + '_f' + '.' + self.file_type)
