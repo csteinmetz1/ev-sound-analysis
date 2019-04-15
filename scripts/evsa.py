@@ -29,7 +29,7 @@ if __name__ == '__main__':
         raise RuntimeError("No test files found.")
 
     # create (and calibrate) analyzer
-    analyzer = Analyzer(cal_files[0], 48000, 60, 
+    analyzer = Analyzer(cal_files[0], 48000, 
                         'mean', args.output, 
                         args.file_type)
 

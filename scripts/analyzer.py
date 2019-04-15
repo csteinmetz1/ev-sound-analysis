@@ -44,10 +44,9 @@ test_names = {
 
 class Analyzer():
     
-    def __init__(self, cal_file, cal_fs, cal_target, cal_type, output_dir, file_type):
+    def __init__(self, cal_file, cal_fs, cal_type, output_dir, file_type):
         self.cal_file = cal_file        # path to calibratio nfile
         self.cal_fs = cal_fs            # sampling rate of calibration file
-        self.cal_target = cal_target    # in dB SPL 
         self.cal_type = cal_type        # 'min', 'max', or 'mean'
         self.block_size = 65536         # analysis size
         self.output_dir = output_dir    # directory to save plots
@@ -64,6 +63,8 @@ class Analyzer():
         return x, fs
 
     def calibrate(self):
+        self.cal_target = int(os.path.basename(self.cal_file).split('_')[1])
+
         # load audio data
         self.cal_audio, self.fs = self.load(self.cal_file)
 
