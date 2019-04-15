@@ -22,7 +22,7 @@ pip install -r requirements.txt
 Run analysis on your audio file or files.
 
 ```
-python scripts/analyze.py input_directory -o output_directory
+python scripts/evsa.py input_directory -o output_directory
 ```
 
 ## Background
