@@ -93,15 +93,29 @@ class Analyzer():
 
         return cal 
 
+    def find_greatest_energy(self, data, fs, frame_size):
+
+        hop_size = int((1/4) * frame_size)
+        frames = (data.shape[0] // frame_size) * 4
+        rmse = []
+        for frame in range(frames):
+            x = data[(hop_size*frame):(hop_size*frame)+frame_size]
+            frame_rmse = np.sqrt((1/frame_size)*np.sum(np.power(x, 2)))
+            rmse.append(frame_rmse)
+
+        return hop_size * np.argmax(rmse)
+
     def analyze(self, audio_file):
         # get the audio samples from test file
         x, fs = self.load(audio_file)
 
-        # take the left channel and self.block_size samples
+        # take the left channel 
         if x.ndim > 1:
             x = x[:self.block_size,0] 	
-        else:
-            x = x[:self.block_size]
+
+        # find the frame with greatest energy
+        frame_idx = self.find_greatest_energy(x, fs, self.block_size)
+        x = x[frame_idx:frame_idx+self.block_size]
             
         # apply A weighting filter to account for human perception
         b, a = A_weighting(fs)
@@ -142,10 +156,11 @@ class Analyzer():
         power += self.cal_target - self.cal[self.cal_type]
 
         analysis = {
-            "audio"  : x,
-            "bands"  : bands,
-            "power"  : power,
-            "xticks" : xticks}
+            "audio"     : x,
+            "bands"     : bands,
+            "power"     : power,
+            "xticks"    : xticks,
+            "frame_idx" : frame_idx}
         
         return analysis
 
@@ -183,10 +198,11 @@ class Analyzer():
         plot_path = os.path.join(self.output_dir, plot_filename)
 
         # extract plot data
-        x      = plot_data['audio']
-        bands  = plot_data['bands']
-        power  = plot_data['power']
-        xticks = plot_data['xticks']
+        x          = plot_data['audio']
+        bands      = plot_data['bands']
+        power      = plot_data['power']
+        xticks     = plot_data['xticks']
+        frame_idx  = plot_data['frame_idx']
 
         # create title for each plot based on filename?
 
@@ -196,12 +212,14 @@ class Analyzer():
         ts = 1.0/self.fs 			    # sampling period		(seconds)
         n = x.shape[0]					# number of samples 
         t = n/self.fs					# length of signal		(seconds)
-        tv = np.linspace(0, t, num=n)	# time points vector	(seconds)
+        tv = np.linspace(frame_idx*(1/self.fs), 
+                         t+frame_idx*(1/self.fs), 
+                         num=n)	        # time points vector	(seconds)
 
         # plot joint time domain and frequency
         fig, ax = plt.subplots(2, 1, figsize=FIGSIZE)
         ax[0].plot(tv, x, color='#1c4b82')
-        ax[0].set_xlim(0, t)
+        ax[0].set_xlim(frame_idx*(1/self.fs), t+frame_idx*(1/self.fs))
         ax[0].set_ylim(-1, 1)
         ax[0].set_xlabel('Time (s)')
         ax[0].set_ylabel('Amplitude ()')
