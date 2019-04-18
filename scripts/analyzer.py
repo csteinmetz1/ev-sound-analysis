@@ -16,17 +16,15 @@ from A_weighting import A_weighting
 # ------------------------
 # maybe pad with zeros if it too short
 # also need to consider finding the 1 second frame with the greatest energy
-# plot ambient sound response as well
 
-# Plot settings
-# -----------------------------------------------------------------------------
+# Plot size
 FIGSIZE = (15, 10)
 
 # colors
-CERULEAN  = "#4484ce"
-ALUMINIUM = "#d9d9d9"
-LIGHT     = "#f9cf00"
-TANGERINE = "#f19f4d" 
+COLOR1 = "#0B3C5D"
+COLOR2 = "#328CC1"
+COLOR3 = "#D9B310"
+COLOR4 = "#1D2731" 
 
 # font sizes
 SMALL_SIZE = 14
@@ -203,41 +201,46 @@ class Analyzer():
         # plot joint time domain and frequency
         fig, ax = plt.subplots(2, 1, figsize=FIGSIZE)
         ax[0].plot(tv, x, color='#1c4b82')
+        ax[0].set_xlim(0, t)
+        ax[0].set_ylim(-1, 1)
         ax[0].set_xlabel('Time (s)')
         ax[0].set_ylabel('Amplitude ()')
         ax[0].set_title(plot_title)
         ax[0].spines['right'].set_visible(False)
         ax[0].spines['top'].set_visible(False)
-        ax[0].grid(zorder=0)
+        ax[0].grid(which='both', axis='y', linestyle='-')
+        ax[0].set_yscale('symlog')
 
-        p1 = ax[1].bar(bands[15:]-width, power[15:], width, color=CERULEAN, zorder=3)
-        p2 = ax[1].bar(bands[15:], self.band_specs, width,  color=TANGERINE, zorder=3)
-        p3 = ax[1].bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=LIGHT, zorder=3)
+        p1 = ax[1].bar(bands[15:]-width, power[15:], width, color=COLOR1, zorder=3)
+        p2 = ax[1].bar(bands[15:], self.band_specs, width,  color=COLOR2, zorder=3)
+        p3 = ax[1].bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=COLOR3, zorder=3)
         ax[1].set_xticks(bands[15:])
         ax[1].set_xticklabels(xticks)
         ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
         ax[1].set_ylabel('Amplitude (dB SPL)')
-        p4 = ax[1].axhline(y=self.two_band_spec, color='#183661', zorder=4)
+        p4 = ax[1].axhline(y=self.two_band_spec, color=COLOR4, zorder=4)
         ax[1].spines['right'].set_visible(False)
         ax[1].spines['top'].set_visible(False)
         ax[1].legend((p1[0], p2[0], p3[0], p4), ('Measured', 'Spec', 'Ambient', '2-Band Spec'))
+        ax[1].grid(which='major', axis='y', linestyle='-')
         
         plt.savefig(plot_path + '_j' + '.' + self.file_type)
         plt.cla()
 
         # plot frequency alone
         fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-        p1 = ax.bar(bands[15:]-width, power[15:], width, color=CERULEAN, zorder=3)
-        p2 = ax.bar(bands[15:], self.band_specs, width,  color=TANGERINE, zorder=3)
-        p3 = ax.bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=LIGHT, zorder=3)
+        p1 = ax.bar(bands[15:]-width, power[15:], width, color=COLOR1, zorder=3)
+        p2 = ax.bar(bands[15:], self.band_specs, width,  color=COLOR2, zorder=3)
+        p3 = ax.bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=COLOR3, zorder=3)
         ax.set_xticks(bands[15:])
         ax.set_xticklabels(xticks)
         ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
         ax.set_ylabel('Amplitude (dB SPL)')
-        p4 = ax.axhline(y=self.two_band_spec, color='#183661', zorder=4)
+        p4 = ax.axhline(y=self.two_band_spec, color=COLOR4, zorder=4)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.legend((p1[0], p2[0], p3[0], p4), ('Measured', 'Spec', 'Ambient', '2-Band Spec'))
+        ax.grid(which='major', axis='y', linestyle='-')
         ax.set_title(plot_title)
 
         plt.savefig(plot_path + '_f' + '.' + self.file_type)
