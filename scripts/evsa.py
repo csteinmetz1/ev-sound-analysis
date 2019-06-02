@@ -40,7 +40,6 @@ if __name__ == '__main__':
     # anaylze all test files
     for sample in test_files:
         try:
-            print(sample)
             analyzer.run(sample)
         except Exception as e:
             print(e)

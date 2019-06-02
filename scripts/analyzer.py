@@ -48,25 +48,27 @@ test_names = {
 
 class Analyzer():
     
-    def __init__(self, cal_file, cal_fs, cal_type, amb_file, output_dir, file_type):
+    def __init__(self, cal_file, cal_fs, cal_type, amb_file, output_dir, file_type, verbose=False):
         self.cal_file     = cal_file        # path to calibration nfile
         self.cal_fs       = cal_fs          # sampling rate of calibration file
         self.cal_type     = cal_type        # 'min', 'max', or 'mean'
         self.amb_file     = amb_file        # path to ambient sound level file
         self.output_dir   = output_dir      # directory to save plots
         self.file_type    = file_type       # image file type - 'png', 'jpg, 'pdf'
+        self.verbose      = verbose         # print of debug information
         #-------------------------------------------------------------------------
         self.block_size   = 65536           # analysis size
         self.cal          = self.calibrate()
         self.amb_analysis = self.analyze(self.amb_file)
-        
+
         # load sound level requirements from json defition file
         self.slr = json.load(open("sound_level_reqs.json"))
     
     def load(self, audio_file):
         x, fs = sf.read(audio_file)
         self.validate_audio(x, fs)
-        print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_file}\n")
+        if self.verbose:
+            print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_file}\n")
         return x, fs
 
     def calibrate(self):
@@ -205,7 +207,7 @@ class Analyzer():
         frame_idx  = plot_data['frame_idx']
 
         # create title for each plot based on filename?
-
+        ymax = np.max(plot_data['audio'])
         width = 0.25
 
         # plotting variables
@@ -219,8 +221,8 @@ class Analyzer():
         # plot joint time domain and frequency
         fig, ax = plt.subplots(2, 1, figsize=FIGSIZE)
         ax[0].plot(tv, x, color='#1c4b82')
-        ax[0].set_xlim(frame_idx*(1/self.fs), t+frame_idx*(1/self.fs))
-        ax[0].set_ylim(-1, 1)
+        ax[0].set_xlim(frame_idx*(1/self.fs), (frame_idx+self.block_size)*(1/self.fs))
+        ax[0].set_ylim(-ymax,ymax)
         ax[0].set_xlabel('Time (s)')
         ax[0].set_ylabel('Amplitude ()')
         ax[0].set_title(plot_title)
@@ -243,7 +245,7 @@ class Analyzer():
         ax[1].grid(which='major', axis='y', linestyle='-')
         
         plt.savefig(plot_path + '_j' + '.' + self.file_type)
-        plt.cla()
+        plt.close()
 
         # plot frequency alone
         fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
@@ -262,7 +264,7 @@ class Analyzer():
         ax.set_title(plot_title)
 
         plt.savefig(plot_path + '_f' + '.' + self.file_type)
-        plt.cla()
+        plt.close()
 
     def get_test_details(self, audio_file):
         filename = os.path.basename(audio_file).replace(".wav", "")
