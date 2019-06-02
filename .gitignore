@@ -1,5 +1,11 @@
+# editor
+.vscode
+
 # python
 __pycache__
 
 # data
 audio/
+
+# virtual environment
+env/
