@@ -68,8 +68,32 @@ class Analyzer():
         x, fs = sf.read(audio_file)
         self.validate_audio(x, fs)
         if self.verbose:
-            print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_file}\n")
+            print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_file}")
         return x, fs
+
+    def one_third_octaves(self, m):
+        # divide into 1/3 octave bands
+        # ANSI 1/3 octave bands 10-37
+        # (10 Hz - 5000 Hz)
+        bands = np.arange(10,38)
+        octaves = (2 ** ((bands-30)/3))*(1000)
+        xticks = [str(int(round(x_w, 0))) for x_w in octaves][15:]
+        
+        energy    = []
+        step      =  1
+        nbins     =  3
+        start_bin = 13
+        stop_bin  = start_bin + nbins
+
+        for idx, band in enumerate(bands):
+            energy.append(np.sum(m[start_bin:stop_bin]))
+            start_bin += nbins
+            nbins     += step 
+            stop_bin  += nbins
+            if (idx+1) % 3 == 0:
+                step *= 2
+
+        return xticks, bands, energy
 
     def calibrate(self):
         # extract the dB SPL target value measured during the calibration
@@ -77,23 +101,24 @@ class Analyzer():
 
         # load audio data
         self.cal_audio, self.fs = self.load(self.cal_file)
-
+        self.cal_audio = self.cal_audio[:self.block_size]
+        
         # process calibration file
-        b, a = A_weighting(self.fs)                 # create filter
-        cal_a = signal.lfilter(b, a, self.cal_audio)# apply filter
-        cal_a = np.power(cal_a, 2)                  # square samples
-        wn = 8 / (self.fs / 2)                      # normalized frequency response
-        b, a = signal.butter(2, wn)                 # create lowpass filter (125ms response time)
-        cal_a = signal.lfilter(b, a, cal_a)         # apply lowpass filter
-        cal_a = np.sqrt(cal_a)                      # take the sqaure root
-        cal_a = 20*np.log10(cal_a)                  # convert to dB scale
+        b, a = A_weighting(self.fs)                                 # create filter
+        cal_a = signal.lfilter(b, a, self.cal_audio)                # apply filter
 
-        cal = {
-            "max"  : np.max(cal_a),
-            "min"  : np.min(cal_a),
-            "mean" : np.mean(cal_a)}
+        # window the signal
+        w = signal.blackmanharris(cal_a.shape[0])
+        cal_a = cal_a * w
 
-        return cal 
+        # perform frequency domain analysis
+        y = fftpack.fft(cal_a)/(cal_a.shape[0])
+        y = y[range(cal_a.shape[0]//2)]
+        xticks, bands, energy = self.one_third_octaves(abs(y))
+
+        cal_a = 20 * np.log10(np.sum(np.power(energy,2)))
+        
+        return cal_a 
 
     def find_greatest_energy(self, data, fs, frame_size):
 
@@ -111,10 +136,6 @@ class Analyzer():
         # get the audio samples from test file
         x, fs = self.load(audio_file)
 
-        # take the left channel 
-        if x.ndim > 1:
-            x = x[:self.block_size,0] 	
-
         # find the frame with greatest energy
         frame_idx = self.find_greatest_energy(x, fs, self.block_size)
         x = x[frame_idx:frame_idx+self.block_size]
@@ -130,37 +151,16 @@ class Analyzer():
         # perform frequency domain analysis
         y = fftpack.fft(x_w)/(x.shape[0])
         y = y[range(x.shape[0]//2)]
-        m = abs(y)
+        xticks, bands, energy = self.one_third_octaves(abs(y))
 
-        # divide into 1/3 octave bands
-        # ANSI 1/3 octave bands 11-37
-        # (12.5 Hz - 5000 Hz)
-        bands = np.arange(10,38)
-        octaves = (2 ** ((bands-30)/3))*(1000)
-        xticks = [str(int(round(x_w, 0))) for x_w in octaves][15:]
-
-        power = []
-        step = 1
-        nbins = 2
-        stop = 11 # starting position
-        for idx, band in enumerate(bands):
-            if (idx != 0) and (idx % 3 == 0):
-                step *= 2
-            nbins += step
-            start = stop + 1
-            stop  = start + nbins - 1
-            power.append(np.sum(m[start:stop]))
-
-        # convert amplitude to power in dB
-        power = 20 * np.log10(power)
-
-        # calibration - dBFS with 1 kHz sine wave @ 60dB SPL in mic location
-        power += self.cal_target - self.cal[self.cal_type]
+        # covnert to dB and apply calibration
+        energy = 20 * np.log10(np.power(energy,2))
+        energy += self.cal_target - self.cal
 
         analysis = {
             "audio"     : x,
             "bands"     : bands,
-            "power"     : power,
+            "energy"    : energy,
             "xticks"    : xticks,
             "frame_idx" : frame_idx}
         
@@ -202,7 +202,7 @@ class Analyzer():
         # extract plot data
         x          = plot_data['audio']
         bands      = plot_data['bands']
-        power      = plot_data['power']
+        energy     = plot_data['energy']
         xticks     = plot_data['xticks']
         frame_idx  = plot_data['frame_idx']
 
@@ -224,16 +224,16 @@ class Analyzer():
         ax[0].set_xlim(frame_idx*(1/self.fs), (frame_idx+self.block_size)*(1/self.fs))
         ax[0].set_ylim(-ymax,ymax)
         ax[0].set_xlabel('Time (s)')
-        ax[0].set_ylabel('Amplitude ()')
+        ax[0].set_ylabel('Amplitude (dBFS)')
         ax[0].set_title(plot_title)
         ax[0].spines['right'].set_visible(False)
         ax[0].spines['top'].set_visible(False)
         ax[0].grid(which='both', axis='y', linestyle='-')
         ax[0].set_yscale('symlog')
 
-        p1 = ax[1].bar(bands[15:]-width, power[15:], width, color=COLOR1, zorder=3)
+        p1 = ax[1].bar(bands[15:]-width, energy[15:], width, color=COLOR1, zorder=3)
         p2 = ax[1].bar(bands[15:], self.band_specs, width,  color=COLOR2, zorder=3)
-        p3 = ax[1].bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=COLOR3, zorder=3)
+        p3 = ax[1].bar(bands[15:]+width, self.amb_analysis['energy'][15:], width,  color=COLOR3, zorder=3)
         ax[1].set_xticks(bands[15:])
         ax[1].set_xticklabels(xticks)
         ax[1].set_xlabel('1/3 Octave Bands - Freq (Hz)')
@@ -249,9 +249,9 @@ class Analyzer():
 
         # plot frequency alone
         fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-        p1 = ax.bar(bands[15:]-width, power[15:], width, color=COLOR1, zorder=3)
+        p1 = ax.bar(bands[15:]-width, energy[15:], width, color=COLOR1, zorder=3)
         p2 = ax.bar(bands[15:], self.band_specs, width,  color=COLOR2, zorder=3)
-        p3 = ax.bar(bands[15:]+width, self.amb_analysis['power'][15:], width,  color=COLOR3, zorder=3)
+        p3 = ax.bar(bands[15:]+width, self.amb_analysis['energy'][15:], width,  color=COLOR3, zorder=3)
         ax.set_xticks(bands[15:])
         ax.set_xticklabels(xticks)
         ax.set_xlabel('1/3 Octave Bands - Freq (Hz)')
@@ -300,5 +300,8 @@ class Analyzer():
 
         if fs != self.cal_fs:
             raise RuntimeError(f"Invalid sampling rate - input file must have fs = {self.cal_fs}")
+
+        if x.ndim > 1:
+            raise RuntimeError(f"Invalid channel count - input file must be mono")
 
         return True

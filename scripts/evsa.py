@@ -35,7 +35,8 @@ if __name__ == '__main__':
     # create (and calibrate) analyzer
     analyzer = Analyzer(cal_files[0], 48000, 'mean', # calibration file details
                         amb_files[0],                # ambient file details   
-                        args.output, args.file_type) # output plot setttings
+                        args.output, args.file_type, # output plot setttings
+                        verbose=False)               # don't show details
 
     # anaylze all test files
     for sample in test_files:
