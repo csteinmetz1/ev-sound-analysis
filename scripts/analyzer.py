@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import json
 import argparse
@@ -71,7 +72,17 @@ class Analyzer():
             print(f"Loaded {x.shape[0]} samples with fs = {fs} from {audio_file}")
         return x, fs
 
-    def one_third_octaves(self, m):
+    def one_third_octaves(self, x):
+
+        # window the signal
+        w = signal.blackmanharris(x.shape[0])
+        x_w = x * w
+
+        # perform frequency domain analysis
+        y = fftpack.fft(x_w) #/(x.shape[0])
+        y = y[range(x.shape[0]//2)]
+        m = np.abs(y)
+
         # divide into 1/3 octave bands
         # ANSI 1/3 octave bands 10-37
         # (10 Hz - 5000 Hz)
@@ -93,31 +104,40 @@ class Analyzer():
             if (idx+1) % 3 == 0:
                 step *= 2
 
-        return xticks, bands, energy
+        return xticks, bands, np.array(energy)
 
-    def calibrate(self):
+    def calibrate(self, response_time="fast"):
         # extract the dB SPL target value measured during the calibration
         self.cal_target = int(os.path.basename(self.cal_file).split('_')[1])
 
-        # load audio data
+        if   response_time == "fast": # 170.67 ms @ 48 kHz
+            N = 8192 
+        elif response_time == "slow": # 1.365 s  @ 48 kHz
+            N = 65536
+        else:
+            raise ValueError("Invalid response time. Must be 'fast' or 'slow'.")
+
+        # load audio data and get analysis frame
         self.cal_audio, self.fs = self.load(self.cal_file)
-        self.cal_audio = self.cal_audio[:self.block_size]
+        idx = self.find_greatest_energy(self.cal_audio, self.fs, N)
+        self.cal_audio = self.cal_audio[idx:idx+N]
         
-        # process calibration file
+        # process calibration file (apply A weighting)
         b, a = A_weighting(self.fs)                                 # create filter
         cal_a = signal.lfilter(b, a, self.cal_audio)                # apply filter
 
         # window the signal
-        w = signal.blackmanharris(cal_a.shape[0])
-        cal_a = cal_a * w
+        w = signal.blackmanharris(N)
+        cal_aw = cal_a * w
 
         # perform frequency domain analysis
-        y = fftpack.fft(cal_a)/(cal_a.shape[0])
-        y = y[range(cal_a.shape[0]//2)]
-        xticks, bands, energy = self.one_third_octaves(abs(y))
+        y = fftpack.fft(cal_aw) #/(x.shape[0])
+        y = y[range(N//2)]
 
-        cal_a = 20 * np.log10(np.sum(np.power(energy,2)))
-        
+        # sum energy and convert to dBA
+        total_energy = (2.0/N) * np.sum(np.power(np.abs(y),2))
+        cal_a = 20 * np.log10(total_energy)
+
         return cal_a 
 
     def find_greatest_energy(self, data, fs, frame_size):
@@ -137,24 +157,29 @@ class Analyzer():
         x, fs = self.load(audio_file)
 
         # find the frame with greatest energy
-        frame_idx = self.find_greatest_energy(x, fs, self.block_size)
-        x = x[frame_idx:frame_idx+self.block_size]
+        N = self.block_size
+        idx = self.find_greatest_energy(x, fs, N)
+        x = x[idx:idx+N]
             
         # apply A weighting filter to account for human perception
         b, a = A_weighting(fs)
         x_a = signal.lfilter(b, a, x)
 
+        # split into 1/3 octave bands
+        xticks, bands, energy = self.one_third_octaves(x_a)
+
         # window the signal
-        w = signal.blackmanharris(x.shape[0])
-        x_w = x_a * w
+        #w = signal.blackmanharris(N)
+        #x_w = x * w
 
         # perform frequency domain analysis
-        y = fftpack.fft(x_w)/(x.shape[0])
-        y = y[range(x.shape[0]//2)]
-        xticks, bands, energy = self.one_third_octaves(abs(y))
+        #y = fftpack.fft(x_w) #/(x.shape[0])
+        #y = y[range(N//2)]
+        #energy = np.abs(y)
 
         # covnert to dB and apply calibration
-        energy = 20 * np.log10(np.power(energy,2))
+        energy = (2.0/N) * np.abs(energy)
+        energy = 20 * np.log10(energy)
         energy += self.cal_target - self.cal
 
         analysis = {
@@ -162,7 +187,7 @@ class Analyzer():
             "bands"     : bands,
             "energy"    : energy,
             "xticks"    : xticks,
-            "frame_idx" : frame_idx}
+            "frame_idx" : idx}
         
         return analysis
 
