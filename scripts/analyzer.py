@@ -66,6 +66,20 @@ class Analyzer():
         self.slr = json.load(open("sound_level_reqs.json"))
     
     def load(self, audio_file):
+        """ Load audio samples from .wav file.
+        
+        Params
+        -------
+        audio_file : string
+            Path to the audio file to load.   
+
+        Returns
+        -------
+        x : array
+            Audio samples as floating point scaled -1 to 1.
+        fs : int
+            Sample rate
+        """         
         x, fs = sf.read(audio_file)
         self.validate_audio(x, fs)
         if self.verbose:
@@ -73,7 +87,22 @@ class Analyzer():
         return x, fs
 
     def one_third_octaves(self, x):
+        """ Load audio samples from .wav file.
+        
+        Params
+        -------
+        x : array
+            Audio samples to analyze with 1/3 octave bands.
 
+        Returns
+        -------
+        xticks : list
+            List of the rounded 1/3 octave bins as strings.
+        bands : array
+            The ANSI 1/3 octave band numbers.
+        energy: array
+            Energy measurements for each of the 1/3 octave bands.
+        """   
         # window the signal
         w = signal.blackmanharris(x.shape[0])
         x_w = x * w
@@ -107,6 +136,24 @@ class Analyzer():
         return xticks, bands, np.array(energy)
 
     def calibrate(self, response_time="fast"):
+        """ Determine calibration factor.
+
+        This works by measuring the dBA SPL at the position of the microphone 
+        (with a simple sound pressure meter) and then making a recording of this 
+        level (preferably while playing something like a 1 kHz sine wave). 
+        This function then takes the FFT of this sample and calculates the total
+        energy present across frequency. This number is equal to the measured value.
+        
+        Params
+        -------
+        response_time : string 
+            Desired response time (use the same as the reference meter).
+
+        Returns
+        -------
+        cal_a : list
+            Total engery in the signal in dBA SPL.
+        """ 
         # extract the dB SPL target value measured during the calibration
         self.cal_target = int(os.path.basename(self.cal_file).split('_')[1])
 
@@ -141,7 +188,26 @@ class Analyzer():
         return cal_a 
 
     def find_greatest_energy(self, data, fs, frame_size):
+        """ Find frame of a given length with the greatest RMS energy
 
+        This function searches the supplied audio samples with the
+        supplied frame size to find which frame has the greatest energy.
+        This frame index is then returned for use in other functions.
+        
+        Params
+        -------
+        data : array 
+            Audio samples.
+        fs : int
+            Audio sample rate.
+        frame_size : int
+            Number of samples in each analysis frame.
+
+        Returns
+        -------
+        frame_idx : int
+            Index of the frame of size frame_size with the greatest RMS energy.
+        """ 
         hop_size = int((1/4) * frame_size)
         frames = (data.shape[0] // frame_size) * 4
         rmse = []
@@ -153,6 +219,25 @@ class Analyzer():
         return hop_size * np.argmax(rmse)
 
     def analyze(self, audio_file):
+        """ Analyze a given audio sample by 1/3 octave bands
+        
+        Params
+        -------
+        audio_file : string 
+            Path to the audio file to analyze.
+
+        Returns
+        -------
+        analysis : dict
+            Resulst from the anaylsis.
+
+                audio - Raw audio samples
+                bands - ANSI 1/3 octave band numbers
+               energy - Calibrated energy in dBA SPL
+               xticks - 1/3 Octave bands by frequency (rounded)
+            frame_idx - Index of the max. energy frame
+
+        """ 
         # get the audio samples from test file
         x, fs = self.load(audio_file)
 
@@ -167,15 +252,6 @@ class Analyzer():
 
         # split into 1/3 octave bands
         xticks, bands, energy = self.one_third_octaves(x_a)
-
-        # window the signal
-        #w = signal.blackmanharris(N)
-        #x_w = x * w
-
-        # perform frequency domain analysis
-        #y = fftpack.fft(x_w) #/(x.shape[0])
-        #y = y[range(N//2)]
-        #energy = np.abs(y)
 
         # covnert to dB and apply calibration
         energy = (2.0/N) * np.abs(energy)
@@ -192,7 +268,14 @@ class Analyzer():
         return analysis
 
     def run(self, audio_file):
+        """ Single run of the analysis of a single test signal.
         
+        Params
+        -------
+        audio_file : string 
+            Path to the audio file to analyze.
+
+        """    
         # determine test type based on filename
         test = self.get_test_details(audio_file)
 
@@ -292,13 +375,37 @@ class Analyzer():
         plt.close()
 
     def get_test_details(self, audio_file):
-        filename = os.path.basename(audio_file).replace(".wav", "")
-        details = filename.split("_")
-        test = {
-            "type" : details[0],
-            "date" : details[1],
-            "num"  : int(details[2]),
-            "file" : filename}
+        """ Parse the filename to extract details form the test.
+        
+        Test recordings MUST conform to the format specifed in the README.
+        Please take a look there if you get an error related to parsing.
+
+        Params
+        -------
+        audio_file : string
+            Path to input audio file.
+
+        Returns
+        -------
+        valid : dict
+            Dictionary containing test details.
+
+            type - Testing type 
+            date - Date of the test
+             num - Test index for particular test type
+            file - Filename
+            
+        """
+        try:
+            filename = os.path.basename(audio_file).replace(".wav", "")
+            details = filename.split("_")
+            test = {
+                "type" : details[0],
+                "date" : details[1],
+                "num"  : int(details[2]),
+                "file" : filename}
+        except Exception as e:
+            print(f"Failed to parse {audio_file}!")
 
         return test
 

@@ -43,4 +43,4 @@ if __name__ == '__main__':
         try:
             analyzer.run(sample)
         except Exception as e:
-            print(e)
+            print(f"Failed to analyze {sample}. Skipping...")
