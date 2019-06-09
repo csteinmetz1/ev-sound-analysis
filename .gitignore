@@ -9,3 +9,6 @@ audio/
 
 # virtual environment
 env/
+
+# MacOS
+.DS_Store
